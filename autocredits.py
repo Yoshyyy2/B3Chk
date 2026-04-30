@@ -15,7 +15,7 @@ import queue
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-BOT_TOKEN = '8388599467:AAHpsWxvSma5U_QFMqOa-qilroPGO9m5hKk'
+BOT_TOKEN = '8322766561:AAGIkZyrrR5UZC1Awk48Ieij4AaG8COqvOE'
 ADMIN_ID = 5629984144
 bot = telebot.TeleBot(BOT_TOKEN, num_threads=10)
 
