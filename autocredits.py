@@ -54,13 +54,13 @@ def reload_proxies_from_api():
         res = requests.get(PROXY_API_URL, timeout=10)
         if res.status_code == 200:
             proxies = [p.strip() for p in res.text.splitlines() if p.strip()]
-            PROXY_LIST = proxies
-            print(f"🔄 Loaded {len(PROXY_LIST)} proxies from API")
+            if proxies:
+                PROXY_LIST = proxies
+                print(f"🔄 Loaded {len(PROXY_LIST)} proxies from API")
         else:
             print("❌ Failed to load proxies from API")
     except Exception as e:
         print(f"Proxy API error: {e}")
-
 PROXY_INDEX = 0
 
 def load_proxies():
@@ -1140,14 +1140,24 @@ def send_help(message):
         print(f"help error: {e}")
 
 if __name__ == '__main__':
-    print("🚀 Braintree Bot started!")
-    print(f"⚡ Optimized for {MAX_WORKERS} parallel workers")
-    print("✅ Enhanced error handling")
-    print("🔥 Ready for multiple users!")
-    
+    print("🚀 BOT STARTING...")
+
     try:
-        bot.infinity_polling(timeout=60, long_polling_timeout=60)
+        load_proxies()
+    except:
+        print("⚠️ No proxies.txt found")
+
+    try:
+        reload_proxies_from_api()
+    except:
+        print("⚠️ Proxy API skipped")
+
+    try:
+        print("🤖 Removing webhook...")
+        bot.remove_webhook()
+
+        print("🤖 Starting polling...")
+        bot.infinity_polling(skip_pending=True, timeout=60, long_polling_timeout=60)
+
     except Exception as e:
-        print(f"Bot error: {e}")
-        time.sleep(5)
-        bot.infinity_polling(timeout=60, long_polling_timeout=60)
+        print("❌ BOT CRASHED:", e)
