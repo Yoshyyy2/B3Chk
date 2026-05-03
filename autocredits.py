@@ -466,26 +466,10 @@ class BraintreeChecker:
                         'time': elapsed_time
                     }
                 
-                try:
                 response_text = response.text.lower()
-            except Exception as e:
-                return {
-                    'status': 'error',
-                    'message': 'Parse error',
-                    'icon': '❌',
-                    'time': 0
-                }
                 
                 # --- ADVANCED RESPONSE PARSER ---
-try:
-                response_text = response.text.lower()
-            except Exception as e:
-                return {
-                    'status': 'error',
-                    'message': 'Parse error',
-                    'icon': '❌',
-                    'time': 0
-                }
+response_text = response.text.lower()
 
 dead_keywords = [
     'declined','do not honor','lost card','stolen card','pickup card','restricted card',
