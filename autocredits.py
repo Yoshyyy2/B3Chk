@@ -20,7 +20,7 @@ ADMIN_ID = 5629984144
 bot = telebot.TeleBot(BOT_TOKEN, num_threads=10)
 
 USERS_FILE = 'users.json'
-MAX_WORKERS = 10
+MAX_WORKERS = 10  # For parallel processing
 
 def load_users():
     if os.path.exists(USERS_FILE):
@@ -50,17 +50,16 @@ PROXY_API_URL = "https://api.proxyscrape.com/v2/?request=getproxies&protocol=htt
 
 def reload_proxies_from_api():
     global PROXY_LIST
-    try:
         res = requests.get(PROXY_API_URL, timeout=10)
         if res.status_code == 200:
             proxies = [p.strip() for p in res.text.splitlines() if p.strip()]
-            if proxies:
-                PROXY_LIST = proxies
-                print(f"🔄 Loaded {len(PROXY_LIST)} proxies from API")
+            PROXY_LIST = proxies
+            print(f"🔄 Loaded {len(PROXY_LIST)} proxies from API")
         else:
             print("❌ Failed to load proxies from API")
     except Exception as e:
         print(f"Proxy API error: {e}")
+
 PROXY_INDEX = 0
 
 def load_proxies():
@@ -116,7 +115,6 @@ def test_proxy(proxy_url):
     ]
 
     for test_url in test_urls:
-        try:
             response = requests.get(
                 test_url,
                 proxies={'http': proxy_url, 'https': proxy_url},
@@ -141,7 +139,6 @@ def test_proxy(proxy_url):
 def set_proxy(proxy_url):
     global ACTIVE_PROXY
 
-    try:
         parts = proxy_url.split(":")
 
         if len(parts) == 4:
@@ -175,7 +172,6 @@ PROXY_API_URL = "https://api.proxyscrape.com/v2/?request=getproxies&protocol=htt
 
 def reload_proxies_from_api():
     global PROXY_LIST
-    try:
         res = requests.get(PROXY_API_URL, timeout=10)
         if res.status_code == 200:
             proxies = [p.strip() for p in res.text.splitlines() if p.strip()]
@@ -257,7 +253,6 @@ def get_card_info(card_number):
     bin_number = card_number[:6]
     
     if HANDYAPI_KEY:
-        try:
             response = requests.get(
                 f"https://data.handyapi.com/bin/{bin_number}",
                 headers={'x-api-key': HANDYAPI_KEY, 'User-Agent': 'Mozilla/5.0'},
@@ -287,7 +282,6 @@ def get_card_info(card_number):
         except Exception as e:
             print(f"HandyAPI error: {e}")
     
-    try:
         response = requests.get(
             f"https://lookup.binlist.net/{bin_number}",
             headers={'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json'},
@@ -407,7 +401,6 @@ class BraintreeChecker:
         """Validate card with proper error handling and retries"""
         start_time = time.time()
         
-        try:
             parts = card.replace(' ', '').split('|')
             if len(parts) != 4:
                 return {'status': 'error', 'message': 'Invalid format', 'icon': '❌', 'time': 0}
@@ -436,7 +429,6 @@ class BraintreeChecker:
         # Retry logic for API calls
         max_retries = 5
         for attempt in range(max_retries):
-            try:
                 params = {
                     'lista': f"{number}|{exp_month}|{exp_year}|{cvv}",
                     'proxy': '',
@@ -654,7 +646,6 @@ def handle_approval_callback(call):
         bot.answer_callback_query(call.id, "❌ Admin only!")
         return
     
-    try:
         action, user_id = call.data.split('_')
         user_id = int(user_id)
         
@@ -664,7 +655,6 @@ def handle_approval_callback(call):
             save_users()
             bot.answer_callback_query(call.id, "✅ User approved!")
             edit_safe(call.message.chat.id, call.message.message_id, f"✅ User {user_id} has been APPROVED!")
-            try:
                 approval_msg = "╔════════════════════╗\n"
                 approval_msg += "║   🎉 APPROVED!   ║\n"
                 approval_msg += "╚════════════════════╝\n\n"
@@ -678,7 +668,6 @@ def handle_approval_callback(call):
             save_users()
             bot.answer_callback_query(call.id, "❌ User denied!")
             edit_safe(call.message.chat.id, call.message.message_id, f"❌ User {user_id} has been DENIED!")
-            try:
                 deny_msg = "╔════════════════════╗\n"
                 deny_msg += "║   ❌ DENIED   ║\n"
                 deny_msg += "╚════════════════════╝\n\n"
@@ -703,7 +692,6 @@ def handle_stop_check(call):
 @bot.message_handler(commands=['bchk'])
 @require_approval
 def braintree_check(message):
-    try:
         can_proceed, remaining = check_cooldown(message.chat.id, 'check')
         if not can_proceed:
             text = "╔════════════════════╗\n"
@@ -779,7 +767,6 @@ def braintree_check(message):
 @bot.message_handler(commands=['bmass'])
 @require_approval
 def braintree_mass(message):
-    try:
         can_proceed, remaining = check_cooldown(message.chat.id, 'mass')
         if not can_proceed:
             text = "╔════════════════════╗\n"
@@ -875,7 +862,6 @@ def braintree_mass(message):
 @bot.message_handler(commands=['bin'])
 @require_approval
 def check_bin(message):
-    try:
         command_parts = message.text.split(maxsplit=1)
         if len(command_parts) < 2:
             send_safe(message.chat.id, "Usage: /bin 464995")
@@ -910,7 +896,6 @@ def check_bin(message):
 @bot.message_handler(commands=['gen'])
 @require_approval
 def generate_cards_command(message):
-    try:
         command_parts = message.text.split()
         if len(command_parts) < 2:
             send_safe(message.chat.id, "Usage:\n/gen 453212 10\n/gen 453212|06|30 10")
@@ -982,7 +967,6 @@ def generate_cards_command(message):
 @bot.message_handler(commands=['custom_site'])
 @require_approval
 def custom_site_command(message):
-    try:
         command_parts = message.text.split(maxsplit=1)
         if len(command_parts) < 2:
             send_safe(message.chat.id, "Usage:\n/custom_site https://yoursite.com")
@@ -1002,7 +986,6 @@ def custom_site_command(message):
 @bot.message_handler(commands=['remove_site'])
 @require_approval
 def remove_site_command(message):
-    try:
         if message.chat.id in user_custom_sites:
             del user_custom_sites[message.chat.id]
             send_safe(message.chat.id, "✅ Custom site removed")
@@ -1026,7 +1009,6 @@ def set_proxy_command(message):
     if message.from_user.id != ADMIN_ID:
         return
     
-    try:
         command_parts = message.text.split(maxsplit=1)
         if len(command_parts) < 2:
             send_safe(message.chat.id, "Usage:\n/proxy http://user:pass@host:port")
@@ -1053,7 +1035,6 @@ def remove_proxy_command(message):
 def proxy_status_command(message):
     if message.from_user.id != ADMIN_ID:
         return
-    try:
         with PROXY_LOCK:
             if ACTIVE_PROXY:
                 send_safe(message.chat.id, f"🟢 Active\n🌐 {ACTIVE_PROXY}")
@@ -1066,7 +1047,6 @@ def proxy_status_command(message):
 def list_users_command(message):
     if message.from_user.id != ADMIN_ID:
         return
-    try:
         if not approved_users:
             send_safe(message.chat.id, "📭 No approved users")
             return
@@ -1081,7 +1061,6 @@ def list_users_command(message):
 def list_pending_command(message):
     if message.from_user.id != ADMIN_ID:
         return
-    try:
         if not pending_requests:
             send_safe(message.chat.id, "📭 No pending requests")
             return
@@ -1097,7 +1076,6 @@ def broadcast_command(message):
     if message.from_user.id != ADMIN_ID:
         return
     
-    try:
         command_parts = message.text.split(maxsplit=1)
         if len(command_parts) < 2:
             send_safe(message.chat.id, "Usage:\n/broadcast Your message")
@@ -1127,7 +1105,6 @@ def broadcast_command(message):
 @bot.message_handler(commands=['help'])
 @require_approval
 def send_help(message):
-    try:
         help_text = "📚 <b>COMMANDS</b>\n\n"
         help_text += "💳 /bchk card|mm|yy|cvv\n"
         help_text += "📦 /bmass [cards]\n"
@@ -1140,24 +1117,14 @@ def send_help(message):
         print(f"help error: {e}")
 
 if __name__ == '__main__':
-    print("🚀 BOT STARTING...")
-
+    print("🚀 Braintree Bot started!")
+    print(f"⚡ Optimized for {MAX_WORKERS} parallel workers")
+    print("✅ Enhanced error handling")
+    print("🔥 Ready for multiple users!")
+    
     try:
-        load_proxies()
-    except:
-        print("⚠️ No proxies.txt found")
-
-    try:
-        reload_proxies_from_api()
-    except:
-        print("⚠️ Proxy API skipped")
-
-    try:
-        print("🤖 Removing webhook...")
-        bot.remove_webhook()
-
-        print("🤖 Starting polling...")
-        bot.infinity_polling(skip_pending=True, timeout=60, long_polling_timeout=60)
-
+        bot.infinity_polling(timeout=60, long_polling_timeout=60)
     except Exception as e:
-        print("❌ BOT CRASHED:", e)
+        print(f"Bot error: {e}")
+        time.sleep(5)
+        bot.infinity_polling(timeout=60, long_polling_timeout=60)
