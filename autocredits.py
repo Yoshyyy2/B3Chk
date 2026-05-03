@@ -155,7 +155,7 @@ def get_proxies():
     with PROXY_LOCK:
         return {'http': ACTIVE_PROXY, 'https': ACTIVE_PROXY} if ACTIVE_PROXY else None
 
-DEFAULT_BRAINTREE_SITE = "https://www.coca-colastore.com,https://www.asedeals.com,https://www.broderbund.com,https://store.segway.com"
+DEFAULT_BRAINTREE_SITE = "https://www.coca-colastore.com,https://www.asedeals.com,https://www.broderbund.com"
 JOSS_API = "https://b3.mr-checker.net/api/wpg.php"
 
 user_sessions = {}
@@ -473,7 +473,6 @@ def send_welcome(message):
         text += "━━━━━━━━━━━━━━━━━━━━━━━━\n"
         text += "💳 /bchk - Single card check\n"
         text += "📦 /bmass - Multiple cards check\n"
-        text += "  \n"
         text += "🔍 /bin - BIN lookup\n"
         text += "🎲 /gen - Generate cards\n"
         text += "🌍 /custom_site - Set your site\n"
@@ -1019,8 +1018,7 @@ def send_help(message):
     try:
         help_text = "📚 <b>COMMANDS</b>\n\n"
         help_text += "💳 /bchk card|mm|yy|cvv\n"
-        help_text += "📦 /bmass [cards]\n"
-        help_text += " \n"
+        help_text += "📦 /bmass [cards]\n"     
         help_text += "🔍 /bin 453212\n"
         help_text += "🎲 /gen 453212 5\n\n"
         help_text += "✨ Fast & Reliable!"
