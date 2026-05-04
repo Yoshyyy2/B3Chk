@@ -1018,7 +1018,7 @@ def send_help(message):
     try:
         help_text = "📚 <b>COMMANDS</b>\n\n"
         help_text += "💳 /bchk card|mm|yy|cvv\n"
-        help_text += "📦 /bmass [cards]\n"     
+        help_text += "📦 /bmass [cards]\n"
         help_text += "🔍 /bin 453212\n"
         help_text += "🎲 /gen 453212 5\n\n"
         help_text += "✨ Fast & Reliable!"
