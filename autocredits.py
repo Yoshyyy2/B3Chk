@@ -124,12 +124,18 @@ def test_proxy(proxy_url):
 def set_proxy(proxy_url):
     global ACTIVE_PROXY
     try:
-        parts = proxy_url.split(":")
-
-        if len(parts) == 4:
-            host, port, user, password = parts
-            proxy_url = f"http://{user}:{password}@{host}:{port}"
-        elif "@" not in proxy_url:
+        proxy_url = proxy_url.strip()
+        # Handle host:port:user:pass format
+        if "@" not in proxy_url:
+            parts = proxy_url.replace("http://", "").replace("https://", "").split(":")
+            if len(parts) == 4:
+                host, port, user, password = parts
+                proxy_url = f"http://{user}:{password}@{host}:{port}"
+            elif len(parts) == 2:
+                proxy_url = f"http://{proxy_url}"
+            else:
+                proxy_url = f"http://{proxy_url}"
+        elif not proxy_url.startswith("http"):
             proxy_url = f"http://{proxy_url}"
     except:
         pass
@@ -924,7 +930,10 @@ def set_proxy_command(message):
         proxy_url = command_parts[1].strip()
         status_msg = send_safe(message.chat.id, "⏳ Testing proxy...")
         success, msg = set_proxy(proxy_url)
-        edit_safe(message.chat.id, status_msg.message_id, msg)
+        if status_msg:
+            edit_safe(message.chat.id, status_msg.message_id, msg)
+        else:
+            send_safe(message.chat.id, msg)
     except Exception as e:
         send_safe(message.chat.id, f"❌ Error: {str(e)[:50]}")
 
