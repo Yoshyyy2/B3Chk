@@ -155,7 +155,7 @@ def get_proxies():
     with PROXY_LOCK:
         return {'http': ACTIVE_PROXY, 'https': ACTIVE_PROXY} if ACTIVE_PROXY else None
 
-DEFAULT_BRAINTREE_SITE = "https://www.coca-colastore.com,https://www.asedeals.com,https://www.broderbund.com"
+DEFAULT_BRAINTREE_SITE = "https://store.segway.com,https://www.asedeals.com,https://www.broderbund.com"
 JOSS_API = "https://b3.mr-checker.net/api/wpg.php"
 
 user_sessions = {}
